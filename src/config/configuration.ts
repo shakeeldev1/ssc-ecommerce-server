@@ -76,7 +76,10 @@ export default (): Configuration => ({
     env: process.env.NODE_ENV ?? 'development',
     port: parseInt(process.env.PORT ?? '3000', 10),
     apiPrefix: process.env.API_PREFIX ?? 'api',
-    corsOrigins: (process.env.CORS_ORIGIN ?? 'http://localhost:5173')
+    corsOrigins: (
+      process.env.CORS_ORIGIN ??
+      'http://localhost:5173,https://ssc-e-commerce.vercel.app'
+    )
       .split(',')
       .map((origin) => origin.trim())
       .filter(Boolean),
