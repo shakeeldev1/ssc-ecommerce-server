@@ -69,6 +69,20 @@ export class MockStudentSyncProvider implements StudentSyncProvider {
         rollNumber: null,
         productVariant: 3,
         coverageAmount: 300_000,
+        fatherName: 'Abdul Rahman',
+        bFormNumber: null,
+        cnicNumber: '35202-1234567-1',
+        address: 'House 12, Street 4, Gulberg',
+        city: 'Lahore',
+        guardianName: null,
+        guardianRelationship: null,
+        guardianMobile: null,
+        nomineeName: 'Ayesha Khan',
+        nomineeRelationship: 'spouse',
+        nomineeMobile: '+923001234567',
+        institutionAddress: null,
+        institutionCity: null,
+        institutionContact: null,
       });
     }
 
@@ -90,6 +104,20 @@ export class MockStudentSyncProvider implements StudentSyncProvider {
       rollNumber: '1042',
       productVariant: 5,
       coverageAmount: 500_000,
+      fatherName: 'Muhammad Aslam',
+      bFormNumber: '35202-7654321-9',
+      cnicNumber: null,
+      address: 'House 45, Block C, Model Town',
+      city: 'Lahore',
+      guardianName: 'Muhammad Aslam',
+      guardianRelationship: 'father',
+      guardianMobile: '+923009876543',
+      nomineeName: null,
+      nomineeRelationship: null,
+      nomineeMobile: null,
+      institutionAddress: 'Main Boulevard, Gulberg III',
+      institutionCity: 'Lahore',
+      institutionContact: '+924235710000',
     });
   }
 }

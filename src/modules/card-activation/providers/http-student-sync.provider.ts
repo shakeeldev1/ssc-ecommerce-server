@@ -37,6 +37,20 @@ interface ExternalProfileResponse {
   rollNumber?: string | null;
   productVariant?: number | null;
   coverageAmount?: number | null;
+  fatherName?: string | null;
+  bFormNumber?: string | null;
+  cnicNumber?: string | null;
+  address?: string | null;
+  city?: string | null;
+  guardianName?: string | null;
+  guardianRelationship?: string | null;
+  guardianMobile?: string | null;
+  nomineeName?: string | null;
+  nomineeRelationship?: string | null;
+  nomineeMobile?: string | null;
+  institutionAddress?: string | null;
+  institutionCity?: string | null;
+  institutionContact?: string | null;
 }
 
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -171,6 +185,20 @@ export class HttpStudentSyncProvider implements StudentSyncProvider {
       rollNumber: isIndividual ? null : (body.rollNumber ?? null),
       productVariant: body.productVariant ?? null,
       coverageAmount: body.coverageAmount ?? null,
+      fatherName: body.fatherName ?? null,
+      bFormNumber: isIndividual ? null : (body.bFormNumber ?? null),
+      cnicNumber: isIndividual ? (body.cnicNumber ?? null) : null,
+      address: body.address ?? null,
+      city: body.city ?? null,
+      guardianName: isIndividual ? null : (body.guardianName ?? null),
+      guardianRelationship: isIndividual ? null : (body.guardianRelationship ?? null),
+      guardianMobile: isIndividual ? null : (body.guardianMobile ?? null),
+      nomineeName: isIndividual ? (body.nomineeName ?? null) : null,
+      nomineeRelationship: isIndividual ? (body.nomineeRelationship ?? null) : null,
+      nomineeMobile: isIndividual ? (body.nomineeMobile ?? null) : null,
+      institutionAddress: isIndividual ? null : (body.institutionAddress ?? null),
+      institutionCity: isIndividual ? null : (body.institutionCity ?? null),
+      institutionContact: isIndividual ? null : (body.institutionContact ?? null),
     };
   }
 

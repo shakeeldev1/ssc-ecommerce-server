@@ -95,6 +95,23 @@ export class StudentsService {
       // Coverage applies to both holder types (students and individuals).
       externalProductVariant: externalProfile.productVariant ?? null,
       externalCoverageAmount: externalProfile.coverageAmount ?? null,
+      // Extended cardholder details, printed on the physical card face.
+      externalContactNumber: externalProfile.contactNumber ?? null,
+      externalEmail: externalProfile.email ?? null,
+      externalFatherName: externalProfile.fatherName ?? null,
+      externalBFormNumber: isStudent ? externalProfile.bFormNumber : null,
+      externalCnicNumber: isStudent ? null : externalProfile.cnicNumber,
+      externalAddress: externalProfile.address ?? null,
+      externalCity: externalProfile.city ?? null,
+      externalGuardianName: isStudent ? externalProfile.guardianName : null,
+      externalGuardianRelationship: isStudent ? externalProfile.guardianRelationship : null,
+      externalGuardianMobile: isStudent ? externalProfile.guardianMobile : null,
+      externalNomineeName: isStudent ? null : externalProfile.nomineeName,
+      externalNomineeRelationship: isStudent ? null : externalProfile.nomineeRelationship,
+      externalNomineeMobile: isStudent ? null : externalProfile.nomineeMobile,
+      externalInstitutionAddress: isStudent ? externalProfile.institutionAddress : null,
+      externalInstitutionCity: isStudent ? externalProfile.institutionCity : null,
+      externalInstitutionContact: isStudent ? externalProfile.institutionContact : null,
       externalSyncedAt: new Date(),
     });
   }

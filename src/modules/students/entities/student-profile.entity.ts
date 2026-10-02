@@ -103,6 +103,60 @@ export class StudentProfile {
   @Column({ type: 'int', name: 'external_coverage_amount', nullable: true })
   externalCoverageAmount: number | null;
 
+  // --- Extended cardholder details synced from the issuer, printed on the
+  // physical card. Populated from the external profile at activation/refresh.
+  @Column({ type: 'varchar', length: 32, name: 'external_contact_number', nullable: true })
+  externalContactNumber: string | null;
+
+  @Column({ type: 'varchar', length: 255, name: 'external_email', nullable: true })
+  externalEmail: string | null;
+
+  @Column({ type: 'varchar', length: 200, name: 'external_father_name', nullable: true })
+  externalFatherName: string | null;
+
+  /** School-linked students only. */
+  @Column({ type: 'varchar', length: 32, name: 'external_b_form_number', nullable: true })
+  externalBFormNumber: string | null;
+
+  /** Individual holders only. */
+  @Column({ type: 'varchar', length: 32, name: 'external_cnic_number', nullable: true })
+  externalCnicNumber: string | null;
+
+  @Column({ type: 'varchar', length: 300, name: 'external_address', nullable: true })
+  externalAddress: string | null;
+
+  @Column({ type: 'varchar', length: 120, name: 'external_city', nullable: true })
+  externalCity: string | null;
+
+  // Emergency contact: guardian (students) / nominee (individuals).
+  @Column({ type: 'varchar', length: 200, name: 'external_guardian_name', nullable: true })
+  externalGuardianName: string | null;
+
+  @Column({ type: 'varchar', length: 50, name: 'external_guardian_relationship', nullable: true })
+  externalGuardianRelationship: string | null;
+
+  @Column({ type: 'varchar', length: 32, name: 'external_guardian_mobile', nullable: true })
+  externalGuardianMobile: string | null;
+
+  @Column({ type: 'varchar', length: 200, name: 'external_nominee_name', nullable: true })
+  externalNomineeName: string | null;
+
+  @Column({ type: 'varchar', length: 50, name: 'external_nominee_relationship', nullable: true })
+  externalNomineeRelationship: string | null;
+
+  @Column({ type: 'varchar', length: 32, name: 'external_nominee_mobile', nullable: true })
+  externalNomineeMobile: string | null;
+
+  // Issuing institution contact (students only) for the card's return footer.
+  @Column({ type: 'varchar', length: 300, name: 'external_institution_address', nullable: true })
+  externalInstitutionAddress: string | null;
+
+  @Column({ type: 'varchar', length: 120, name: 'external_institution_city', nullable: true })
+  externalInstitutionCity: string | null;
+
+  @Column({ type: 'varchar', length: 32, name: 'external_institution_contact', nullable: true })
+  externalInstitutionContact: string | null;
+
   @Column({ type: 'timestamptz', name: 'external_synced_at', nullable: true })
   externalSyncedAt: Date | null;
 

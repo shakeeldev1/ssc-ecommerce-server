@@ -25,6 +25,29 @@ export interface ExternalCardProfile {
   /** EFU takaful product variant (1–10) and derived coverage (PKR). */
   productVariant: number | null;
   coverageAmount: number | null;
+  // Extended cardholder details, so SSC can render the full physical card face
+  // identically to the issuer. All optional; school-only fields are null for
+  // individuals and vice-versa.
+  fatherName: string | null;
+  /** Student B-Form number (school-linked students only). */
+  bFormNumber: string | null;
+  /** CNIC number (individual holders only). */
+  cnicNumber: string | null;
+  /** Address line — guardian's for students, own for individuals. */
+  address: string | null;
+  /** City — guardian's for students, own for individuals. */
+  city: string | null;
+  // Emergency contact: guardian (students) / nominee (individuals).
+  guardianName: string | null;
+  guardianRelationship: string | null;
+  guardianMobile: string | null;
+  nomineeName: string | null;
+  nomineeRelationship: string | null;
+  nomineeMobile: string | null;
+  // Issuing institution contact (students only) for the card's return footer.
+  institutionAddress: string | null;
+  institutionCity: string | null;
+  institutionContact: string | null;
 }
 
 /**
