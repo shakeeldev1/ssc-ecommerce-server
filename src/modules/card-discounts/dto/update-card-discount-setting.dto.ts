@@ -1,12 +1,42 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsBoolean, IsNumber, IsOptional, Max, Min, ValidateIf } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  Max,
+  Min,
+  ValidateIf,
+} from 'class-validator';
+import { CardDiscountType } from '@/modules/card-discounts/enums/card-discount-type.enum';
 
 export class UpdateCardDiscountSettingDto {
-  @ApiProperty({ example: 10, description: 'Percent off eligible products (0–100)' })
+  @ApiProperty({
+    enum: CardDiscountType,
+    example: CardDiscountType.PERCENT,
+    description: 'percent = % off eligible products; fixed = flat PKR amount off',
+  })
+  @IsEnum(CardDiscountType)
+  discountType: CardDiscountType;
+
+  @ApiProperty({
+    example: 10,
+    description: 'Percent off eligible products (0–100). Required when discountType = percent.',
+  })
+  @ValidateIf((o: UpdateCardDiscountSettingDto) => o.discountType === CardDiscountType.PERCENT)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   @Max(100)
-  discountPercent: number;
+  discountPercent = 0;
+
+  @ApiProperty({
+    example: 200,
+    description: 'Flat PKR amount off the order. Required when discountType = fixed.',
+  })
+  @ValidateIf((o: UpdateCardDiscountSettingDto) => o.discountType === CardDiscountType.FIXED)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  discountAmount = 0;
 
   @ApiProperty({
     required: false,

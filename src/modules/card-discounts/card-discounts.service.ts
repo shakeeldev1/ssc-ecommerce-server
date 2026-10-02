@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { AuditLogService } from '@/modules/audit-log/audit-log.service';
 import { UpdateCardDiscountSettingDto } from '@/modules/card-discounts/dto/update-card-discount-setting.dto';
 import { CardDiscountSetting } from '@/modules/card-discounts/entities/card-discount-setting.entity';
+import { CardDiscountType } from '@/modules/card-discounts/enums/card-discount-type.enum';
 import {
   CardDiscountComputation,
   CardDiscountLine,
@@ -43,13 +44,20 @@ export class CardDiscountsService {
   ): Promise<CardDiscountSetting> {
     const setting = await this.getOrCreate(holderType);
     const oldValue = {
+      discountType: setting.discountType,
       discountPercent: setting.discountPercent,
+      discountAmount: setting.discountAmount,
       maxDiscountPerOrder: setting.maxDiscountPerOrder,
       isActive: setting.isActive,
     };
 
     await this.settingsRepository.update(setting.id, {
-      discountPercent: dto.discountPercent,
+      discountType: dto.discountType,
+      // Keep both fields coherent: zero out the one that doesn't apply.
+      discountPercent:
+        dto.discountType === CardDiscountType.PERCENT ? dto.discountPercent : 0,
+      discountAmount:
+        dto.discountType === CardDiscountType.FIXED ? dto.discountAmount : 0,
       maxDiscountPerOrder: dto.maxDiscountPerOrder ?? null,
       isActive: dto.isActive,
       updatedByUserId: actorUserId,
@@ -105,14 +113,24 @@ export class CardDiscountsService {
     const setting = await this.settingsRepository.findOne({
       where: { holderType: holder.holderType },
     });
-    if (!setting?.isActive || setting.discountPercent <= 0) {
+    if (!setting?.isActive) {
+      return null;
+    }
+    // No usable discount for the configured type.
+    const hasValue =
+      setting.discountType === CardDiscountType.FIXED
+        ? setting.discountAmount > 0
+        : setting.discountPercent > 0;
+    if (!hasValue) {
       return null;
     }
 
     return {
       holderType: holder.holderType,
       cardNumber: holder.cardNumber,
+      discountType: setting.discountType,
       discountPercent: setting.discountPercent,
+      discountAmount: setting.discountAmount,
       maxDiscountPerOrder: setting.maxDiscountPerOrder,
     };
   }
@@ -132,10 +150,15 @@ export class CardDiscountsService {
       return { eligibility, eligibleSubtotal, discountAmount: 0 };
     }
 
-    let discountAmount = roundMoney((eligibleSubtotal * eligibility.discountPercent) / 100);
+    let discountAmount =
+      eligibility.discountType === CardDiscountType.FIXED
+        ? roundMoney(eligibility.discountAmount)
+        : roundMoney((eligibleSubtotal * eligibility.discountPercent) / 100);
     if (eligibility.maxDiscountPerOrder !== null) {
       discountAmount = Math.min(discountAmount, eligibility.maxDiscountPerOrder);
     }
+    // A flat amount can never exceed what's actually eligible.
+    discountAmount = Math.min(discountAmount, eligibleSubtotal);
 
     return { eligibility, eligibleSubtotal, discountAmount };
   }

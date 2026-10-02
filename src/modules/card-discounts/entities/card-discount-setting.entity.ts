@@ -7,6 +7,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { ExternalHolderType } from '@/modules/students/enums/external-holder-type.enum';
+import { CardDiscountType } from '@/modules/card-discounts/enums/card-discount-type.enum';
 
 const decimalTransformer = {
   to: (value?: number | null) => value,
@@ -29,6 +30,15 @@ export class CardDiscountSetting {
   @Column({ type: 'enum', enum: ExternalHolderType, name: 'holder_type' })
   holderType: ExternalHolderType;
 
+  /** Whether the discount is a percentage or a flat PKR amount. */
+  @Column({
+    type: 'enum',
+    enum: CardDiscountType,
+    name: 'discount_type',
+    default: CardDiscountType.PERCENT,
+  })
+  discountType: CardDiscountType;
+
   @Column({
     type: 'numeric',
     precision: 5,
@@ -38,6 +48,17 @@ export class CardDiscountSetting {
     transformer: decimalTransformer,
   })
   discountPercent: number;
+
+  /** Flat amount off (PKR) when discountType is `fixed`. */
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    name: 'discount_amount',
+    default: 0,
+    transformer: decimalTransformer,
+  })
+  discountAmount: number;
 
   /** Optional cap on the discount per order (PKR); null = no cap. */
   @Column({
