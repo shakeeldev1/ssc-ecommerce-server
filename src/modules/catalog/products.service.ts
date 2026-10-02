@@ -12,6 +12,7 @@ import { UpdateProductDto } from '@/modules/catalog/dto/update-product.dto';
 import { ProductImage } from '@/modules/catalog/entities/product-image.entity';
 import { ProductVariant } from '@/modules/catalog/entities/product-variant.entity';
 import { Product } from '@/modules/catalog/entities/product.entity';
+import { ProductApprovalStatus } from '@/modules/catalog/enums/product-approval-status.enum';
 import { AuditLogService } from '@/modules/audit-log/audit-log.service';
 import { InventoryService } from '@/modules/inventory/inventory.service';
 import { MediaService } from '@/modules/media/media.service';
@@ -37,6 +38,11 @@ export class ProductsService {
 
   async create(dto: CreateProductDto, actor: AuthenticatedUser): Promise<Product> {
     const vendorId = await this.resolveOwnVendorId(actor);
+    // Admin/platform products go live immediately; vendor products await approval.
+    const approvalStatus =
+      actor.role === UserRole.SUPER_ADMIN
+        ? ProductApprovalStatus.APPROVED
+        : ProductApprovalStatus.PENDING;
 
     const product = this.productsRepository.create({
       name: dto.name,
@@ -47,6 +53,7 @@ export class ProductsService {
       isStudentDiscountEligible: dto.isStudentDiscountEligible ?? false,
       specifications: dto.specifications ?? null,
       slug: await this.generateUniqueSlug(dto.name),
+      approvalStatus,
     });
     const saved = await this.productsRepository.save(product);
     return this.findOrFail(saved.id);
@@ -69,7 +76,11 @@ export class ProductsService {
   }
 
   async list(query: ListProductsQueryDto): Promise<PaginatedResult<Product>> {
-    const where: FindOptionsWhere<Product> = { isActive: true };
+    // Storefront: only live, admin-approved products are ever listed.
+    const where: FindOptionsWhere<Product> = {
+      isActive: true,
+      approvalStatus: ProductApprovalStatus.APPROVED,
+    };
     if (query.categoryId) where.categoryId = query.categoryId;
     if (query.brandId) where.brandId = query.brandId;
     if (query.vendorId) where.vendorId = query.vendorId;
@@ -143,6 +154,32 @@ export class ProductsService {
       entityId: id,
       previousValue: { name: product.name, vendorId: product.vendorId, isActive: product.isActive },
     });
+  }
+
+  /** Admin: approve or reject a product's storefront visibility. */
+  async setApproval(
+    id: string,
+    status: ProductApprovalStatus,
+    actor: AuthenticatedUser,
+    reason?: string,
+  ): Promise<Product> {
+    const product = await this.findOrFail(id);
+
+    await this.productsRepository.update(id, {
+      approvalStatus: status,
+      rejectionReason: status === ProductApprovalStatus.REJECTED ? (reason ?? null) : null,
+    });
+
+    await this.auditLogService.record({
+      actorUserId: actor.id,
+      action: `product.${status}`,
+      entityName: 'Product',
+      entityId: id,
+      previousValue: { approvalStatus: product.approvalStatus },
+      newValue: { approvalStatus: status, ...(reason ? { reason } : {}) },
+    });
+
+    return this.findOrFail(id);
   }
 
   countActive(): Promise<number> {

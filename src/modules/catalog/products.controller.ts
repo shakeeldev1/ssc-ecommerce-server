@@ -24,6 +24,7 @@ import { AuthenticatedUser } from '@/modules/auth/types/jwt-payload.interface';
 import { CreateProductVariantDto } from '@/modules/catalog/dto/create-product-variant.dto';
 import { CreateProductDto } from '@/modules/catalog/dto/create-product.dto';
 import { ListProductsQueryDto } from '@/modules/catalog/dto/list-products-query.dto';
+import { UpdateProductApprovalDto } from '@/modules/catalog/dto/update-product-approval.dto';
 import { UpdateProductVariantDto } from '@/modules/catalog/dto/update-product-variant.dto';
 import { UpdateProductDto } from '@/modules/catalog/dto/update-product.dto';
 import { ProductImage } from '@/modules/catalog/entities/product-image.entity';
@@ -154,6 +155,18 @@ export class ProductsController {
     @Param('imageId') imageId: string,
   ): Promise<void> {
     await this.productsService.removeImage(productId, imageId, user);
+  }
+
+  @ApiBearerAuth()
+  @Roles(UserRole.SUPER_ADMIN)
+  @Patch(':id/approval')
+  @ApiOperation({ summary: 'Admin: approve or reject a product for the storefront' })
+  setApproval(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateProductApprovalDto,
+  ): Promise<Product> {
+    return this.productsService.setApproval(id, dto.status, user, dto.reason);
   }
 
   @ApiBearerAuth()

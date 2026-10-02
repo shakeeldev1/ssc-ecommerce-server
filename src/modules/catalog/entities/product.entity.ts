@@ -13,6 +13,7 @@ import { Brand } from '@/modules/catalog/entities/brand.entity';
 import { Category } from '@/modules/catalog/entities/category.entity';
 import { ProductImage } from '@/modules/catalog/entities/product-image.entity';
 import { ProductVariant } from '@/modules/catalog/entities/product-variant.entity';
+import { ProductApprovalStatus } from '@/modules/catalog/enums/product-approval-status.enum';
 import { Vendor } from '@/modules/vendors/entities/vendor.entity';
 
 @Entity('products')
@@ -66,6 +67,23 @@ export class Product {
 
   @Column({ type: 'boolean', name: 'is_active', default: true })
   isActive: boolean;
+
+  /**
+   * Admin moderation gate. Vendor-created products start PENDING and only
+   * appear on the storefront once an admin APPROVES them; admin/platform
+   * products are created already APPROVED.
+   */
+  @Index()
+  @Column({
+    type: 'enum',
+    enum: ProductApprovalStatus,
+    name: 'approval_status',
+    default: ProductApprovalStatus.PENDING,
+  })
+  approvalStatus: ProductApprovalStatus;
+
+  @Column({ type: 'text', name: 'rejection_reason', nullable: true })
+  rejectionReason: string | null;
 
   @OneToMany(() => ProductVariant, (variant) => variant.product)
   variants: ProductVariant[];
