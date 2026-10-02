@@ -22,6 +22,9 @@ export interface ExternalCardProfile {
   institutionLogoUrl: string | null;
   sectionName: string | null;
   rollNumber: string | null;
+  /** EFU takaful product variant (1–10) and derived coverage (PKR). */
+  productVariant: number | null;
+  coverageAmount: number | null;
 }
 
 /**

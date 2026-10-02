@@ -92,6 +92,9 @@ export class StudentsService {
       externalClassName: isStudent ? externalProfile.className : null,
       externalSectionName: isStudent ? externalProfile.sectionName : null,
       externalRollNumber: isStudent ? externalProfile.rollNumber : null,
+      // Coverage applies to both holder types (students and individuals).
+      externalProductVariant: externalProfile.productVariant ?? null,
+      externalCoverageAmount: externalProfile.coverageAmount ?? null,
       externalSyncedAt: new Date(),
     });
   }

@@ -95,6 +95,14 @@ export class StudentProfile {
   @Column({ type: 'varchar', length: 50, name: 'external_roll_number', nullable: true })
   externalRollNumber: string | null;
 
+  /** EFU takaful product variant (1–10) from the issuer, if set. */
+  @Column({ type: 'int', name: 'external_product_variant', nullable: true })
+  externalProductVariant: number | null;
+
+  /** Derived takaful coverage in PKR (variant × 100,000), shown on the card. */
+  @Column({ type: 'int', name: 'external_coverage_amount', nullable: true })
+  externalCoverageAmount: number | null;
+
   @Column({ type: 'timestamptz', name: 'external_synced_at', nullable: true })
   externalSyncedAt: Date | null;
 

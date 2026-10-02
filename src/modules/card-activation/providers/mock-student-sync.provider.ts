@@ -67,6 +67,8 @@ export class MockStudentSyncProvider implements StudentSyncProvider {
         institutionLogoUrl: null,
         sectionName: null,
         rollNumber: null,
+        productVariant: 3,
+        coverageAmount: 300_000,
       });
     }
 
@@ -86,6 +88,8 @@ export class MockStudentSyncProvider implements StudentSyncProvider {
       institutionLogoUrl: null,
       sectionName: 'A',
       rollNumber: '1042',
+      productVariant: 5,
+      coverageAmount: 500_000,
     });
   }
 }

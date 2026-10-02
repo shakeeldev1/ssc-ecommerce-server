@@ -35,6 +35,8 @@ interface ExternalProfileResponse {
   institutionLogoUrl?: string | null;
   sectionName?: string | null;
   rollNumber?: string | null;
+  productVariant?: number | null;
+  coverageAmount?: number | null;
 }
 
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -167,6 +169,8 @@ export class HttpStudentSyncProvider implements StudentSyncProvider {
       institutionLogoUrl: isIndividual ? null : (body.institutionLogoUrl ?? null),
       sectionName: isIndividual ? null : (body.sectionName ?? null),
       rollNumber: isIndividual ? null : (body.rollNumber ?? null),
+      productVariant: body.productVariant ?? null,
+      coverageAmount: body.coverageAmount ?? null,
     };
   }
 
