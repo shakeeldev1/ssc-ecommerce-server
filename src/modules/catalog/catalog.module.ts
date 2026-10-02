@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuditLogModule } from '@/modules/audit-log/audit-log.module';
 import { InventoryModule } from '@/modules/inventory/inventory.module';
 import { MediaModule } from '@/modules/media/media.module';
 import { VendorsModule } from '@/modules/vendors/vendors.module';
@@ -21,6 +22,7 @@ import { ProductsService } from '@/modules/catalog/products.service';
     InventoryModule,
     MediaModule,
     VendorsModule,
+    AuditLogModule,
   ],
   controllers: [BrandsController, CategoriesController, ProductsController],
   providers: [BrandsService, CategoriesService, ProductsService],

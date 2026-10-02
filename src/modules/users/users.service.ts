@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '@/modules/users/entities/user.entity';
@@ -6,6 +11,8 @@ import { UserRole } from '@/modules/users/enums/user-role.enum';
 import { UserStatus } from '@/modules/users/enums/user-status.enum';
 import { ListUsersQueryDto } from '@/modules/users/dto/list-users-query.dto';
 import { PaginatedResult } from '@/common/interfaces/paginated-result.interface';
+import { AuditLogService } from '@/modules/audit-log/audit-log.service';
+import { AuthenticatedUser } from '@/modules/auth/types/jwt-payload.interface';
 
 export interface CreateUserInput {
   email: string;
@@ -21,6 +28,7 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   async create(input: CreateUserInput): Promise<User> {
@@ -81,5 +89,58 @@ export class UsersService {
       .take(limit)
       .getManyAndCount();
     return { items, total, page, limit };
+  }
+
+  /** Admin: block / suspend / re-activate another account. */
+  async setStatus(id: string, status: UserStatus, actor: AuthenticatedUser): Promise<User> {
+    const user = await this.assertActionable(id, actor, 'change the status of');
+    const previous = { status: user.status };
+    await this.usersRepository.update(id, { status });
+
+    await this.auditLogService.record({
+      actorUserId: actor.id,
+      action: 'user.status_updated',
+      entityName: 'User',
+      entityId: id,
+      previousValue: previous,
+      newValue: { status },
+    });
+
+    return this.findById(id);
+  }
+
+  /** Admin: permanently delete an account (cascades to its profile/card/orders snapshots are preserved). */
+  async removeAsAdmin(id: string, actor: AuthenticatedUser): Promise<void> {
+    const user = await this.assertActionable(id, actor, 'delete');
+
+    await this.auditLogService.record({
+      actorUserId: actor.id,
+      action: 'user.deleted',
+      entityName: 'User',
+      entityId: id,
+      previousValue: { email: user.email, role: user.role, status: user.status },
+    });
+
+    await this.usersRepository.delete(id);
+  }
+
+  /**
+   * Guards admin actions on an account: the target must exist, must not be the
+   * actor themselves, and must not be another super admin (super admins are
+   * managed out-of-band so they can never lock each other out or be escalated).
+   */
+  private async assertActionable(
+    id: string,
+    actor: AuthenticatedUser,
+    verb: string,
+  ): Promise<User> {
+    if (id === actor.id) {
+      throw new ForbiddenException(`You cannot ${verb} your own account`);
+    }
+    const user = await this.findById(id);
+    if (user.role === UserRole.SUPER_ADMIN) {
+      throw new ForbiddenException(`You cannot ${verb} a super admin account`);
+    }
+    return user;
   }
 }

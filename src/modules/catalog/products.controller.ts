@@ -56,6 +56,14 @@ export class ProductsController {
     return this.productsService.listMine(user);
   }
 
+  @Get('admin/all')
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Admin: list every product including inactive/draft listings' })
+  listAll(@Query() query: ListProductsQueryDto): Promise<PaginatedResult<Product>> {
+    return this.productsService.listAll(query);
+  }
+
   @Public()
   @Get(':id')
   @ApiOperation({ summary: 'Get a product with its variants and images' })
@@ -146,5 +154,14 @@ export class ProductsController {
     @Param('imageId') imageId: string,
   ): Promise<void> {
     await this.productsService.removeImage(productId, imageId, user);
+  }
+
+  @ApiBearerAuth()
+  @Roles(...CATALOG_MANAGERS)
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete a product (admin: any; vendor: their own)' })
+  async remove(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string): Promise<void> {
+    await this.productsService.remove(id, user);
   }
 }

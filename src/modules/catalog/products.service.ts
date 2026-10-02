@@ -12,6 +12,7 @@ import { UpdateProductDto } from '@/modules/catalog/dto/update-product.dto';
 import { ProductImage } from '@/modules/catalog/entities/product-image.entity';
 import { ProductVariant } from '@/modules/catalog/entities/product-variant.entity';
 import { Product } from '@/modules/catalog/entities/product.entity';
+import { AuditLogService } from '@/modules/audit-log/audit-log.service';
 import { InventoryService } from '@/modules/inventory/inventory.service';
 import { MediaService } from '@/modules/media/media.service';
 import { UserRole } from '@/modules/users/enums/user-role.enum';
@@ -31,6 +32,7 @@ export class ProductsService {
     private readonly inventoryService: InventoryService,
     private readonly mediaService: MediaService,
     private readonly vendorsService: VendorsService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   async create(dto: CreateProductDto, actor: AuthenticatedUser): Promise<Product> {
@@ -88,6 +90,59 @@ export class ProductsService {
     });
 
     return { items, total, page, limit };
+  }
+
+  /** Admin: every product including inactive/draft listings, with the same filters as the public list. */
+  async listAll(query: ListProductsQueryDto): Promise<PaginatedResult<Product>> {
+    const where: FindOptionsWhere<Product> = {};
+    if (query.categoryId) where.categoryId = query.categoryId;
+    if (query.brandId) where.brandId = query.brandId;
+    if (query.vendorId) where.vendorId = query.vendorId;
+    if (query.isStudentDiscountEligible !== undefined) {
+      where.isStudentDiscountEligible = query.isStudentDiscountEligible;
+    }
+    if (query.search) where.name = ILike(`%${query.search}%`);
+
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+
+    const [items, total] = await this.productsRepository.findAndCount({
+      where,
+      relations: PRODUCT_RELATIONS,
+      order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    return { items, total, page, limit };
+  }
+
+  /**
+   * Admin can delete any product; a vendor only their own. Variants, inventory,
+   * cart lines and open RFQs cascade with the product; placed-order line-item
+   * snapshots are independent and are preserved.
+   */
+  async remove(id: string, actor: AuthenticatedUser): Promise<void> {
+    const product = await this.findOrFail(id);
+    await this.assertCanManage(product, actor);
+
+    for (const image of product.images ?? []) {
+      try {
+        await this.mediaService.deleteImage(image.publicId);
+      } catch {
+        // Best-effort: a missing remote asset must not block the delete.
+      }
+    }
+
+    await this.productsRepository.delete(id);
+
+    await this.auditLogService.record({
+      actorUserId: actor.id,
+      action: 'product.deleted',
+      entityName: 'Product',
+      entityId: id,
+      previousValue: { name: product.name, vendorId: product.vendorId, isActive: product.isActive },
+    });
   }
 
   countActive(): Promise<number> {
