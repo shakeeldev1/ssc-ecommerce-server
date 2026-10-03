@@ -67,10 +67,12 @@ export class WholesaleQuotesService {
   /** Incoming RFQs for a vendor's own wholesale-eligible variants (or every request, for admin). */
   async listIncoming(actor: AuthenticatedUser): Promise<QuoteRequest[]> {
     if (actor.role === UserRole.SUPER_ADMIN) {
-      return this.requestsRepository.find({
-        relations: { productVariant: { product: true } },
-        order: { createdAt: 'DESC' },
-      });
+      return this.requestsRepository
+        .createQueryBuilder('rfq')
+        .leftJoinAndSelect('rfq.productVariant', 'variant')
+        .leftJoinAndSelect('variant.product', 'product')
+        .orderBy('rfq.createdAt', 'DESC')
+        .getMany();
     }
 
     const vendorId = await this.vendorsService.getApprovedVendorIdForUser(actor.id);
@@ -85,11 +87,13 @@ export class WholesaleQuotesService {
       return [];
     }
 
-    return this.requestsRepository.find({
-      where: { productVariantId: In(ownVariants.map((v) => v.id)) },
-      relations: { productVariant: { product: true } },
-      order: { createdAt: 'DESC' },
-    });
+    return this.requestsRepository
+      .createQueryBuilder('rfq')
+      .leftJoinAndSelect('rfq.productVariant', 'variant')
+      .leftJoinAndSelect('variant.product', 'product')
+      .where('rfq.productVariantId IN (:...ids)', { ids: ownVariants.map((v) => v.id) })
+      .orderBy('rfq.createdAt', 'DESC')
+      .getMany();
   }
 
   /** Quotations already issued against a request (newest first). */
