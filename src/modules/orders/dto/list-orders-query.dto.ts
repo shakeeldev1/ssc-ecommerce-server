@@ -4,7 +4,9 @@ import { IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import { OrderStatus } from '@/modules/orders/enums/order-status.enum';
 
 export class ListOrdersQueryDto {
-  @ApiPropertyOptional({ description: 'Search by order number, invoice number, or customer name/email' })
+  @ApiPropertyOptional({
+    description: 'Search by order number, invoice number, or customer name/email',
+  })
   @IsOptional()
   @IsString()
   search?: string;

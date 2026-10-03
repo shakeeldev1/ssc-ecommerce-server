@@ -247,7 +247,9 @@ export class OrdersService {
   }
 
   /** The product-variant ids that belong to this user's approved vendor account. */
-  private async vendorVariantIds(userId: string): Promise<{ vendorId: string; variantIds: string[] }> {
+  private async vendorVariantIds(
+    userId: string,
+  ): Promise<{ vendorId: string; variantIds: string[] }> {
     const vendorId = await this.vendorsService.getApprovedVendorIdForUser(userId);
     const products = await this.productsRepository.find({
       where: { vendorId },
