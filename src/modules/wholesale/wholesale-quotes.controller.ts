@@ -50,6 +50,13 @@ export class WholesaleQuotesController {
     return this.quotesService.findRequestOrFail(id);
   }
 
+  @Get('quote-requests/:id/quotations')
+  @Roles(...QUOTATION_ISSUERS)
+  @ApiOperation({ summary: 'List quotations already issued against an RFQ' })
+  listQuotations(@Param('id') requestId: string): Promise<Quotation[]> {
+    return this.quotesService.listQuotationsForRequest(requestId);
+  }
+
   @Post('quote-requests/:id/quotations')
   @Roles(...QUOTATION_ISSUERS)
   @ApiOperation({ summary: 'Respond to an open RFQ with a price/quantity/validity quotation' })

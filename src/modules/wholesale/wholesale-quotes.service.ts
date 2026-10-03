@@ -67,7 +67,10 @@ export class WholesaleQuotesService {
   /** Incoming RFQs for a vendor's own wholesale-eligible variants (or every request, for admin). */
   async listIncoming(actor: AuthenticatedUser): Promise<QuoteRequest[]> {
     if (actor.role === UserRole.SUPER_ADMIN) {
-      return this.requestsRepository.find({ order: { createdAt: 'DESC' } });
+      return this.requestsRepository.find({
+        relations: { productVariant: { product: true } },
+        order: { createdAt: 'DESC' },
+      });
     }
 
     const vendorId = await this.vendorsService.getApprovedVendorIdForUser(actor.id);
@@ -84,6 +87,15 @@ export class WholesaleQuotesService {
 
     return this.requestsRepository.find({
       where: { productVariantId: In(ownVariants.map((v) => v.id)) },
+      relations: { productVariant: { product: true } },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /** Quotations already issued against a request (newest first). */
+  async listQuotationsForRequest(requestId: string): Promise<Quotation[]> {
+    return this.quotationsRepository.find({
+      where: { quoteRequestId: requestId },
       order: { createdAt: 'DESC' },
     });
   }
