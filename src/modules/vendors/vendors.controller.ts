@@ -19,6 +19,7 @@ import { Roles } from '@/modules/auth/decorators/roles.decorator';
 import { AuthenticatedUser } from '@/modules/auth/types/jwt-payload.interface';
 import { UserRole } from '@/modules/users/enums/user-role.enum';
 import { ApplyVendorDto } from '@/modules/vendors/dto/apply-vendor.dto';
+import { UpdateVendorProfileDto } from '@/modules/vendors/dto/update-vendor-profile.dto';
 import { UpdateVendorStatusDto } from '@/modules/vendors/dto/update-vendor-status.dto';
 import { VendorApplicationResponseDto } from '@/modules/vendors/dto/vendor-application-response.dto';
 import { VendorDocument } from '@/modules/vendors/entities/vendor-document.entity';
@@ -48,6 +49,41 @@ export class VendorsController {
   @ApiOperation({ summary: "Get the current user's vendor application/profile" })
   getMine(@CurrentUser() user: AuthenticatedUser): Promise<Vendor> {
     return this.vendorsService.getForUser(user.id);
+  }
+
+  @Patch('me')
+  @ApiBearerAuth()
+  @Roles(UserRole.VENDOR, UserRole.WHOLESALE_VENDOR)
+  @ApiOperation({ summary: 'Update your own vendor business details' })
+  updateMine(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: UpdateVendorProfileDto,
+  ): Promise<Vendor> {
+    return this.vendorsService.updateOwnProfile(user.id, dto);
+  }
+
+  @Post('me/logo')
+  @ApiBearerAuth()
+  @Roles(UserRole.VENDOR, UserRole.WHOLESALE_VENDOR)
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Upload or replace your business logo' })
+  @UseInterceptors(
+    FileInterceptor('logo', {
+      storage: memoryStorage(),
+      limits: { fileSize: MAX_DOCUMENT_SIZE_BYTES },
+    }),
+  )
+  async updateLogo(
+    @CurrentUser() user: AuthenticatedUser,
+    @UploadedFile() file?: Express.Multer.File,
+  ): Promise<Vendor> {
+    if (!file) {
+      throw new BadRequestException('A "logo" file is required');
+    }
+    if (!ALLOWED_DOCUMENT_MIME_TYPES.includes(file.mimetype)) {
+      throw new BadRequestException('Logo must be a JPEG, PNG or WEBP image');
+    }
+    return this.vendorsService.updateLogo(user.id, file.buffer);
   }
 
   @Post('me/documents')

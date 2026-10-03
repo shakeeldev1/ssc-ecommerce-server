@@ -14,6 +14,7 @@ import { OtpService } from '@/modules/otp/otp.service';
 import { UserRole } from '@/modules/users/enums/user-role.enum';
 import { UsersService } from '@/modules/users/users.service';
 import { ApplyVendorDto } from '@/modules/vendors/dto/apply-vendor.dto';
+import { UpdateVendorProfileDto } from '@/modules/vendors/dto/update-vendor-profile.dto';
 import { VendorApplicationResponseDto } from '@/modules/vendors/dto/vendor-application-response.dto';
 import { VendorDocument } from '@/modules/vendors/entities/vendor-document.entity';
 import { Vendor } from '@/modules/vendors/entities/vendor.entity';
@@ -97,6 +98,27 @@ export class VendorsService {
       throw new NotFoundException('Vendor not found');
     }
     return vendor;
+  }
+
+  /** A vendor edits their own business details (never their approval status). */
+  async updateOwnProfile(userId: string, dto: UpdateVendorProfileDto): Promise<Vendor> {
+    const vendor = await this.getForUser(userId);
+    await this.vendorsRepository.update(vendor.id, { ...dto });
+    return this.getForUser(userId);
+  }
+
+  /** Upload/replace the vendor's business logo (Cloudinary). */
+  async updateLogo(userId: string, fileBuffer: Buffer): Promise<Vendor> {
+    const vendor = await this.getForUser(userId);
+    const uploaded = await this.mediaService.uploadImage(fileBuffer, 'vendor-logos');
+    if (vendor.logoPublicId) {
+      await this.mediaService.deleteImage(vendor.logoPublicId);
+    }
+    await this.vendorsRepository.update(vendor.id, {
+      logoUrl: uploaded.url,
+      logoPublicId: uploaded.publicId,
+    });
+    return this.getForUser(userId);
   }
 
   async list(status?: VendorStatus): Promise<Vendor[]> {

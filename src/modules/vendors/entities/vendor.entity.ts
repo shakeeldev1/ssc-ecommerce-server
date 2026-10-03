@@ -47,6 +47,12 @@ export class Vendor {
   @Column({ type: 'varchar', length: 100, name: 'bank_name' })
   bankName: string;
 
+  @Column({ type: 'varchar', length: 500, name: 'logo_url', nullable: true })
+  logoUrl: string | null;
+
+  @Column({ type: 'varchar', length: 255, name: 'logo_public_id', nullable: true })
+  logoPublicId: string | null;
+
   @Column({ type: 'enum', enum: VendorStatus, default: VendorStatus.PENDING })
   status: VendorStatus;
 
