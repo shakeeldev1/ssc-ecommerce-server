@@ -9,6 +9,8 @@ import { In, Repository } from 'typeorm';
 import { PaginatedResult } from '@/common/interfaces/paginated-result.interface';
 import { Product } from '@/modules/catalog/entities/product.entity';
 import { ProductVariant } from '@/modules/catalog/entities/product-variant.entity';
+import { ProductApprovalStatus } from '@/modules/catalog/enums/product-approval-status.enum';
+import { VendorAnalytics } from '@/modules/orders/interfaces/vendor-analytics.interface';
 import { CardDiscountsService } from '@/modules/card-discounts/card-discounts.service';
 import { CartService } from '@/modules/cart/cart.service';
 import { CommissionService } from '@/modules/commission/commission.service';
@@ -278,12 +280,22 @@ export class OrdersService {
     }
 
     // Distinct, newest-first order ids that include one of the vendor's items.
-    const idRows = await this.ordersRepository
+    const idQuery = this.ordersRepository
       .createQueryBuilder('order')
       .select('order.id', 'id')
       .innerJoin('order_items', 'oi', 'oi.order_id = order.id')
       .where('oi.product_variant_id IN (:...variantIds)', { variantIds })
-      .andWhere(query.status ? 'order.status = :status' : '1 = 1', { status: query.status })
+      .andWhere(query.status ? 'order.status = :status' : '1 = 1', { status: query.status });
+
+    if (query.search?.trim()) {
+      const search = `%${query.search.trim().toLowerCase()}%`;
+      idQuery.andWhere(
+        "(LOWER(order.order_number) LIKE :search OR LOWER(order.shipping_address ->> 'fullName') LIKE :search)",
+        { search },
+      );
+    }
+
+    const idRows = await idQuery
       .groupBy('order.id')
       .addSelect('MAX(order.created_at)', 'created_at')
       .orderBy('created_at', 'DESC')
@@ -352,6 +364,125 @@ export class OrdersService {
 
     await this.orderItemsRepository.update(item.id, { fulfillmentStatus: status });
     return this.orderItemsRepository.findOneByOrFail({ id: item.id });
+  }
+
+  /** Dashboard analytics for the current vendor: catalogue + order/revenue aggregates. */
+  async getVendorAnalytics(userId: string): Promise<VendorAnalytics> {
+    const { vendorId, variantIds } = await this.vendorVariantIds(userId);
+
+    const [products, activeProducts, pendingApproval] = await Promise.all([
+      this.productsRepository.count({ where: { vendorId } }),
+      this.productsRepository.count({ where: { vendorId, isActive: true } }),
+      this.productsRepository.count({
+        where: { vendorId, approvalStatus: ProductApprovalStatus.PENDING },
+      }),
+    ]);
+
+    const emptyStatus = Object.values(OrderStatus).reduce(
+      (acc, status) => ({ ...acc, [status]: 0 }),
+      {} as Record<OrderStatus, number>,
+    );
+
+    if (variantIds.length === 0) {
+      return {
+        totals: { products, activeProducts, pendingApproval, orders: 0, revenue: 0, itemsToFulfill: 0 },
+        orderStatusBreakdown: emptyStatus,
+        fulfillmentBreakdown: { pending: 0, packed: 0, shipped: 0 },
+        monthlyTrend: this.lastSixMonths().map((month) => ({ month, revenue: 0, orders: 0 })),
+        topProducts: [],
+      };
+    }
+
+    const since = new Date();
+    since.setMonth(since.getMonth() - 5, 1);
+    since.setHours(0, 0, 0, 0);
+
+    const [statusRows, fulfillmentRows, trendRows, topRows] = await Promise.all([
+      this.ordersRepository.query(
+        `SELECT o.status AS status, COUNT(DISTINCT o.id)::int AS orders,
+                COALESCE(SUM(oi.line_total), 0)::float AS revenue
+         FROM order_items oi JOIN orders o ON o.id = oi.order_id
+         WHERE oi.product_variant_id = ANY($1) GROUP BY o.status`,
+        [variantIds],
+      ) as Promise<Array<{ status: OrderStatus; orders: number; revenue: number }>>,
+      this.ordersRepository.query(
+        `SELECT oi.fulfillment_status AS status, COUNT(*)::int AS count
+         FROM order_items oi WHERE oi.product_variant_id = ANY($1)
+         GROUP BY oi.fulfillment_status`,
+        [variantIds],
+      ) as Promise<Array<{ status: string; count: number }>>,
+      this.ordersRepository.query(
+        `SELECT to_char(o.created_at, 'YYYY-MM') AS month, COUNT(DISTINCT o.id)::int AS orders,
+                COALESCE(SUM(oi.line_total), 0)::float AS revenue
+         FROM order_items oi JOIN orders o ON o.id = oi.order_id
+         WHERE oi.product_variant_id = ANY($1) AND o.created_at >= $2
+         GROUP BY month ORDER BY month ASC`,
+        [variantIds, since.toISOString()],
+      ) as Promise<Array<{ month: string; orders: number; revenue: number }>>,
+      this.ordersRepository.query(
+        `SELECT oi.product_name AS name, SUM(oi.quantity)::int AS quantity,
+                COALESCE(SUM(oi.line_total), 0)::float AS revenue
+         FROM order_items oi WHERE oi.product_variant_id = ANY($1)
+         GROUP BY oi.product_name ORDER BY revenue DESC LIMIT 5`,
+        [variantIds],
+      ) as Promise<Array<{ name: string; quantity: number; revenue: number }>>,
+    ]);
+
+    const orderStatusBreakdown = { ...emptyStatus };
+    let orders = 0;
+    let revenue = 0;
+    for (const row of statusRows) {
+      orderStatusBreakdown[row.status] = row.orders;
+      orders += row.orders;
+      if (row.status !== OrderStatus.CANCELLED && row.status !== OrderStatus.RETURNED) {
+        revenue += row.revenue;
+      }
+    }
+
+    const fulfillmentBreakdown = { pending: 0, packed: 0, shipped: 0 };
+    for (const row of fulfillmentRows) {
+      if (row.status in fulfillmentBreakdown) {
+        fulfillmentBreakdown[row.status as keyof typeof fulfillmentBreakdown] = row.count;
+      }
+    }
+
+    const trendByMonth = new Map(trendRows.map((row) => [row.month, row]));
+    const monthlyTrend = this.lastSixMonths().map((month) => ({
+      month,
+      revenue: roundMoney(trendByMonth.get(month)?.revenue ?? 0),
+      orders: trendByMonth.get(month)?.orders ?? 0,
+    }));
+
+    return {
+      totals: {
+        products,
+        activeProducts,
+        pendingApproval,
+        orders,
+        revenue: roundMoney(revenue),
+        itemsToFulfill: fulfillmentBreakdown.pending + fulfillmentBreakdown.packed,
+      },
+      orderStatusBreakdown,
+      fulfillmentBreakdown,
+      monthlyTrend,
+      topProducts: topRows.map((row) => ({
+        name: row.name,
+        quantity: row.quantity,
+        revenue: roundMoney(row.revenue),
+      })),
+    };
+  }
+
+  /** The last six 'YYYY-MM' month keys, oldest first. */
+  private lastSixMonths(): string[] {
+    const months: string[] = [];
+    const cursor = new Date();
+    cursor.setDate(1);
+    for (let i = 5; i >= 0; i -= 1) {
+      const d = new Date(cursor.getFullYear(), cursor.getMonth() - i, 1);
+      months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    }
+    return months;
   }
 
   async getForUser(userId: string, orderId: string): Promise<Order> {

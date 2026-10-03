@@ -10,6 +10,7 @@ import { UpdateItemFulfillmentDto } from '@/modules/orders/dto/update-item-fulfi
 import { UpdateOrderStatusDto } from '@/modules/orders/dto/update-order-status.dto';
 import { OrderItem } from '@/modules/orders/entities/order-item.entity';
 import { Order } from '@/modules/orders/entities/order.entity';
+import { VendorAnalytics } from '@/modules/orders/interfaces/vendor-analytics.interface';
 import { VendorOrderView } from '@/modules/orders/interfaces/vendor-order-view.interface';
 import { OrdersService } from '@/modules/orders/orders.service';
 import { UserRole } from '@/modules/users/enums/user-role.enum';
@@ -50,6 +51,13 @@ export class OrdersController {
     @Query() query: ListOrdersQueryDto,
   ): Promise<PaginatedResult<VendorOrderView>> {
     return this.ordersService.listForVendor(user.id, query);
+  }
+
+  @Get('vendor/analytics')
+  @Roles(UserRole.VENDOR, UserRole.WHOLESALE_VENDOR)
+  @ApiOperation({ summary: 'Dashboard analytics for the current vendor' })
+  vendorAnalytics(@CurrentUser() user: AuthenticatedUser): Promise<VendorAnalytics> {
+    return this.ordersService.getVendorAnalytics(user.id);
   }
 
   @Patch(':orderId/items/:itemId/fulfillment')
