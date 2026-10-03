@@ -5,8 +5,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { PaginatedResult } from '@/common/interfaces/paginated-result.interface';
+import { Product } from '@/modules/catalog/entities/product.entity';
+import { ProductVariant } from '@/modules/catalog/entities/product-variant.entity';
 import { CardDiscountsService } from '@/modules/card-discounts/card-discounts.service';
 import { CartService } from '@/modules/cart/cart.service';
 import { CommissionService } from '@/modules/commission/commission.service';
@@ -25,11 +27,19 @@ import {
 import { PaymentMethod } from '@/modules/orders/enums/payment-method.enum';
 import { PaymentStatus } from '@/modules/orders/enums/payment-status.enum';
 import { generateOrderNumber } from '@/modules/orders/utils/generate-order-number.util';
+import {
+  FULFILLMENT_RANK,
+  OrderItemFulfillmentStatus,
+} from '@/modules/orders/enums/order-item-fulfillment-status.enum';
+import { VendorOrderView } from '@/modules/orders/interfaces/vendor-order-view.interface';
 import { InventoryService } from '@/modules/inventory/inventory.service';
 import { NotificationsService } from '@/modules/notifications/notifications.service';
 import { TaxService } from '@/modules/tax/tax.service';
+import { VendorsService } from '@/modules/vendors/vendors.service';
 
 const ORDER_RELATIONS = { items: true, statusHistory: true };
+
+const roundMoney = (value: number): number => Math.round(value * 100) / 100;
 
 interface ConsumedLine {
   productVariantId: string;
@@ -45,6 +55,11 @@ export class OrdersService {
     private readonly orderItemsRepository: Repository<OrderItem>,
     @InjectRepository(OrderStatusHistory)
     private readonly statusHistoryRepository: Repository<OrderStatusHistory>,
+    @InjectRepository(Product)
+    private readonly productsRepository: Repository<Product>,
+    @InjectRepository(ProductVariant)
+    private readonly variantsRepository: Repository<ProductVariant>,
+    private readonly vendorsService: VendorsService,
     private readonly cartService: CartService,
     private readonly inventoryService: InventoryService,
     private readonly couponsService: CouponsService,
@@ -229,6 +244,112 @@ export class OrdersService {
       .take(limit)
       .getManyAndCount();
     return { items, total, page, limit };
+  }
+
+  /** The product-variant ids that belong to this user's approved vendor account. */
+  private async vendorVariantIds(userId: string): Promise<{ vendorId: string; variantIds: string[] }> {
+    const vendorId = await this.vendorsService.getApprovedVendorIdForUser(userId);
+    const products = await this.productsRepository.find({
+      where: { vendorId },
+      select: { id: true },
+    });
+    if (products.length === 0) {
+      return { vendorId, variantIds: [] };
+    }
+    const variants = await this.variantsRepository.find({
+      where: { productId: In(products.map((p) => p.id)) },
+      select: { id: true },
+    });
+    return { vendorId, variantIds: variants.map((v) => v.id) };
+  }
+
+  /** Orders that contain at least one of the vendor's products, trimmed to their own items. */
+  async listForVendor(
+    userId: string,
+    query: ListOrdersQueryDto,
+  ): Promise<PaginatedResult<VendorOrderView>> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const { variantIds } = await this.vendorVariantIds(userId);
+    if (variantIds.length === 0) {
+      return { items: [], total: 0, page, limit };
+    }
+
+    // Distinct, newest-first order ids that include one of the vendor's items.
+    const idRows = await this.ordersRepository
+      .createQueryBuilder('order')
+      .select('order.id', 'id')
+      .innerJoin('order_items', 'oi', 'oi.order_id = order.id')
+      .where('oi.product_variant_id IN (:...variantIds)', { variantIds })
+      .andWhere(query.status ? 'order.status = :status' : '1 = 1', { status: query.status })
+      .groupBy('order.id')
+      .addSelect('MAX(order.created_at)', 'created_at')
+      .orderBy('created_at', 'DESC')
+      .getRawMany<{ id: string }>();
+
+    const total = idRows.length;
+    const pageIds = idRows.slice((page - 1) * limit, page * limit).map((row) => row.id);
+    if (pageIds.length === 0) {
+      return { items: [], total, page, limit };
+    }
+
+    const orders = await this.ordersRepository.find({
+      where: { id: In(pageIds) },
+      relations: { items: true },
+    });
+    const byId = new Map(orders.map((order) => [order.id, order]));
+    const variantSet = new Set(variantIds);
+
+    const items: VendorOrderView[] = pageIds
+      .map((id) => byId.get(id))
+      .filter((order): order is Order => Boolean(order))
+      .map((order) => {
+        const vendorItems = order.items.filter((item) => variantSet.has(item.productVariantId));
+        return {
+          id: order.id,
+          orderNumber: order.orderNumber,
+          status: order.status,
+          paymentStatus: order.paymentStatus,
+          shippingAddress: order.shippingAddress,
+          createdAt: order.createdAt,
+          items: vendorItems,
+          vendorItemCount: vendorItems.reduce((sum, item) => sum + item.quantity, 0),
+          vendorSubtotal: roundMoney(
+            vendorItems.reduce((sum, item) => sum + Number(item.lineTotal), 0),
+          ),
+        };
+      });
+
+    return { items, total, page, limit };
+  }
+
+  /** A vendor advances fulfillment on one of their own line items (forward only). */
+  async updateItemFulfillment(
+    userId: string,
+    orderId: string,
+    itemId: string,
+    status: OrderItemFulfillmentStatus,
+  ): Promise<OrderItem> {
+    const { vendorId } = await this.vendorVariantIds(userId);
+    const item = await this.orderItemsRepository.findOne({ where: { id: itemId, orderId } });
+    if (!item) {
+      throw new NotFoundException('Order item not found');
+    }
+    const variant = await this.variantsRepository.findOne({
+      where: { id: item.productVariantId },
+    });
+    const product = variant
+      ? await this.productsRepository.findOne({ where: { id: variant.productId } })
+      : null;
+    if (!product || product.vendorId !== vendorId) {
+      throw new ForbiddenException('This item does not belong to your catalogue');
+    }
+    if (FULFILLMENT_RANK[status] < FULFILLMENT_RANK[item.fulfillmentStatus]) {
+      throw new BadRequestException('Fulfillment can only move forward');
+    }
+
+    await this.orderItemsRepository.update(item.id, { fulfillmentStatus: status });
+    return this.orderItemsRepository.findOneByOrFail({ id: item.id });
   }
 
   async getForUser(userId: string, orderId: string): Promise<Order> {

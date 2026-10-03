@@ -8,6 +8,7 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Order } from '@/modules/orders/entities/order.entity';
+import { OrderItemFulfillmentStatus } from '@/modules/orders/enums/order-item-fulfillment-status.enum';
 
 const decimalTransformer = {
   to: (value?: number) => value,
@@ -61,6 +62,15 @@ export class OrderItem {
     transformer: decimalTransformer,
   })
   lineTotal: number;
+
+  /** The owning vendor's fulfillment progress for this line (pending → packed → shipped). */
+  @Column({
+    type: 'enum',
+    enum: OrderItemFulfillmentStatus,
+    name: 'fulfillment_status',
+    default: OrderItemFulfillmentStatus.PENDING,
+  })
+  fulfillmentStatus: OrderItemFulfillmentStatus;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

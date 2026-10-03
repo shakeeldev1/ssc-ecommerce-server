@@ -6,8 +6,11 @@ import { Roles } from '@/modules/auth/decorators/roles.decorator';
 import { AuthenticatedUser } from '@/modules/auth/types/jwt-payload.interface';
 import { CheckoutDto } from '@/modules/orders/dto/checkout.dto';
 import { ListOrdersQueryDto } from '@/modules/orders/dto/list-orders-query.dto';
+import { UpdateItemFulfillmentDto } from '@/modules/orders/dto/update-item-fulfillment.dto';
 import { UpdateOrderStatusDto } from '@/modules/orders/dto/update-order-status.dto';
+import { OrderItem } from '@/modules/orders/entities/order-item.entity';
 import { Order } from '@/modules/orders/entities/order.entity';
+import { VendorOrderView } from '@/modules/orders/interfaces/vendor-order-view.interface';
 import { OrdersService } from '@/modules/orders/orders.service';
 import { UserRole } from '@/modules/users/enums/user-role.enum';
 
@@ -37,6 +40,28 @@ export class OrdersController {
   @ApiOperation({ summary: 'List all orders across every user' })
   listAll(@Query() query: ListOrdersQueryDto): Promise<PaginatedResult<Order>> {
     return this.ordersService.listAll(query);
+  }
+
+  @Get('vendor')
+  @Roles(UserRole.VENDOR, UserRole.WHOLESALE_VENDOR)
+  @ApiOperation({ summary: "Orders containing the current vendor's products (their items only)" })
+  listForVendor(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: ListOrdersQueryDto,
+  ): Promise<PaginatedResult<VendorOrderView>> {
+    return this.ordersService.listForVendor(user.id, query);
+  }
+
+  @Patch(':orderId/items/:itemId/fulfillment')
+  @Roles(UserRole.VENDOR, UserRole.WHOLESALE_VENDOR)
+  @ApiOperation({ summary: 'Vendor marks one of their order items packed/shipped' })
+  updateItemFulfillment(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('orderId') orderId: string,
+    @Param('itemId') itemId: string,
+    @Body() dto: UpdateItemFulfillmentDto,
+  ): Promise<OrderItem> {
+    return this.ordersService.updateItemFulfillment(user.id, orderId, itemId, dto.status);
   }
 
   @Get(':id')
