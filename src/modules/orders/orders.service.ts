@@ -385,7 +385,14 @@ export class OrdersService {
 
     if (variantIds.length === 0) {
       return {
-        totals: { products, activeProducts, pendingApproval, orders: 0, revenue: 0, itemsToFulfill: 0 },
+        totals: {
+          products,
+          activeProducts,
+          pendingApproval,
+          orders: 0,
+          revenue: 0,
+          itemsToFulfill: 0,
+        },
         orderStatusBreakdown: emptyStatus,
         fulfillmentBreakdown: { pending: 0, packed: 0, shipped: 0 },
         monthlyTrend: this.lastSixMonths().map((month) => ({ month, revenue: 0, orders: 0 })),
@@ -397,35 +404,41 @@ export class OrdersService {
     since.setMonth(since.getMonth() - 5, 1);
     since.setHours(0, 0, 0, 0);
 
+    const vendorItems = () =>
+      this.orderItemsRepository
+        .createQueryBuilder('oi')
+        .where('oi.product_variant_id IN (:...variantIds)', { variantIds });
+
     const [statusRows, fulfillmentRows, trendRows, topRows] = await Promise.all([
-      this.ordersRepository.query(
-        `SELECT o.status AS status, COUNT(DISTINCT o.id)::int AS orders,
-                COALESCE(SUM(oi.line_total), 0)::float AS revenue
-         FROM order_items oi JOIN orders o ON o.id = oi.order_id
-         WHERE oi.product_variant_id = ANY($1) GROUP BY o.status`,
-        [variantIds],
-      ) as Promise<Array<{ status: OrderStatus; orders: number; revenue: number }>>,
-      this.ordersRepository.query(
-        `SELECT oi.fulfillment_status AS status, COUNT(*)::int AS count
-         FROM order_items oi WHERE oi.product_variant_id = ANY($1)
-         GROUP BY oi.fulfillment_status`,
-        [variantIds],
-      ) as Promise<Array<{ status: string; count: number }>>,
-      this.ordersRepository.query(
-        `SELECT to_char(o.created_at, 'YYYY-MM') AS month, COUNT(DISTINCT o.id)::int AS orders,
-                COALESCE(SUM(oi.line_total), 0)::float AS revenue
-         FROM order_items oi JOIN orders o ON o.id = oi.order_id
-         WHERE oi.product_variant_id = ANY($1) AND o.created_at >= $2
-         GROUP BY month ORDER BY month ASC`,
-        [variantIds, since.toISOString()],
-      ) as Promise<Array<{ month: string; orders: number; revenue: number }>>,
-      this.ordersRepository.query(
-        `SELECT oi.product_name AS name, SUM(oi.quantity)::int AS quantity,
-                COALESCE(SUM(oi.line_total), 0)::float AS revenue
-         FROM order_items oi WHERE oi.product_variant_id = ANY($1)
-         GROUP BY oi.product_name ORDER BY revenue DESC LIMIT 5`,
-        [variantIds],
-      ) as Promise<Array<{ name: string; quantity: number; revenue: number }>>,
+      vendorItems()
+        .innerJoin('orders', 'o', 'o.id = oi.order_id')
+        .select('o.status', 'status')
+        .addSelect('COUNT(DISTINCT o.id)::int', 'orders')
+        .addSelect('COALESCE(SUM(oi.line_total), 0)::float', 'revenue')
+        .groupBy('o.status')
+        .getRawMany<{ status: OrderStatus; orders: number; revenue: number }>(),
+      vendorItems()
+        .select('oi.fulfillment_status', 'status')
+        .addSelect('COUNT(*)::int', 'count')
+        .groupBy('oi.fulfillment_status')
+        .getRawMany<{ status: string; count: number }>(),
+      vendorItems()
+        .innerJoin('orders', 'o', 'o.id = oi.order_id')
+        .select("to_char(o.created_at, 'YYYY-MM')", 'month')
+        .addSelect('COUNT(DISTINCT o.id)::int', 'orders')
+        .addSelect('COALESCE(SUM(oi.line_total), 0)::float', 'revenue')
+        .andWhere('o.created_at >= :since', { since })
+        .groupBy('month')
+        .orderBy('month', 'ASC')
+        .getRawMany<{ month: string; orders: number; revenue: number }>(),
+      vendorItems()
+        .select('oi.product_name', 'name')
+        .addSelect('SUM(oi.quantity)::int', 'quantity')
+        .addSelect('COALESCE(SUM(oi.line_total), 0)::float', 'revenue')
+        .groupBy('oi.product_name')
+        .orderBy('revenue', 'DESC')
+        .limit(5)
+        .getRawMany<{ name: string; quantity: number; revenue: number }>(),
     ]);
 
     const orderStatusBreakdown = { ...emptyStatus };
